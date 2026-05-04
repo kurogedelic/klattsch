@@ -30,7 +30,32 @@ const DEFAULTS = Object.freeze({
   trailOffMs: 150,
 });
 
+const HOMOGLYPH_MAP = {
+  // Greek uppercase that look like Latin uppercase
+  'Α':'A', 'Β':'B', 'Ε':'E', 'Η':'H', 'Ι':'I', 'Κ':'K',
+  'Μ':'M', 'Ν':'N', 'Ο':'O', 'Ρ':'P', 'Τ':'T', 'Υ':'Y', 'Ζ':'Z',
+  // Cyrillic uppercase that look like Latin uppercase
+  'А':'A', 'В':'B', 'С':'C', 'Е':'E', 'Н':'H', 'К':'K',
+  'М':'M', 'О':'O', 'Р':'P', 'Т':'T',
+  // Cyrillic lowercase
+  'а':'a', 'с':'c', 'е':'e', 'о':'o', 'р':'p',
+};
+const HOMOGLYPH_RE = new RegExp('[' + Object.keys(HOMOGLYPH_MAP).join('') + ']', 'g');
+const ZERO_WIDTH_RE = new RegExp(
+  '[' + [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF].map(c => String.fromCharCode(c)).join('') + ']',
+  'g',
+);
+
+function normalize(input) {
+  return input
+    .normalize('NFKC')
+    .replace(ZERO_WIDTH_RE, '')
+    .replace(HOMOGLYPH_RE, ch => HOMOGLYPH_MAP[ch] ?? ch);
+}
+
 export function tokenize(input) {
+  input = normalize(input);
+  input = input.replace(/\/\*[\s\S]*?\*\//g, '');
   const stripped = input.replace(/(^|\s)#.*$/gm, '$1');
   const parts = stripped.trim().split(/\s+/).filter(Boolean);
   const tokens = [];
@@ -70,6 +95,7 @@ export function tokenize(input) {
       const keyMap = {
         b: 'base', r: 'rate', p: 'pause', s: 'scale',
         v: 'vibrato', w: 'vibratoRate',
+        m: 'tremolo', n: 'tremoloRate',
         h: 'aspiration', t: 'tilt', g: 'effort',
       };
       const key = keyMap[letter];
@@ -113,6 +139,8 @@ export function compile(tokens, opts = {}) {
   const initialScale       = opts.scale ?? 1.0;
   const initialVibrato     = opts.vibratoDepth ?? 0;
   const initialVibratoRate = opts.vibratoRate ?? 5;
+  const initialTremolo     = opts.tremoloDepth ?? 0;
+  const initialTremoloRate = opts.tremoloRate ?? 5;
   const initialAspiration  = opts.aspiration ?? 0;
   const initialTilt        = opts.tilt ?? 0;
   const initialEffort      = opts.effort ?? 0.5;
@@ -121,6 +149,8 @@ export function compile(tokens, opts = {}) {
   let scale        = initialScale;
   let vibrato      = initialVibrato;
   let vibratoRate  = initialVibratoRate;
+  let tremolo      = initialTremolo;
+  let tremoloRate  = initialTremoloRate;
   let aspiration   = initialAspiration;
   let tilt         = initialTilt;
   let effort       = initialEffort;
@@ -194,6 +224,8 @@ export function compile(tokens, opts = {}) {
   const stateExtras = () => ({
     vibratoDepth: vibrato,
     vibratoRate,
+    tremoloDepth: tremolo,
+    tremoloRate,
     aspiration,
     tilt,
     effort,
@@ -259,6 +291,16 @@ export function compile(tokens, opts = {}) {
           if (t.reset) vibratoRate = initialVibratoRate;
           else if (t.relative) vibratoRate += t.value;
           else vibratoRate = t.value;
+          break;
+        case 'tremolo':
+          if (t.reset) tremolo = initialTremolo;
+          else if (t.relative) tremolo += t.value;
+          else tremolo = t.value;
+          break;
+        case 'tremoloRate':
+          if (t.reset) tremoloRate = initialTremoloRate;
+          else if (t.relative) tremoloRate += t.value;
+          else tremoloRate = t.value;
           break;
         case 'aspiration':
           if (t.reset) aspiration = initialAspiration;

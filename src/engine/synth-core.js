@@ -20,6 +20,8 @@ export const PARAMS = [
   'gain',
   'vibratoDepth',   // Hz peak deviation
   'vibratoRate',    // Hz LFO rate
+  'tremoloDepth',   // 0..1 amplitude modulation depth
+  'tremoloRate',    // Hz tremolo LFO rate
   'aspiration',     // 0..1 noise mixed into voiced source (breathiness)
   'tilt',           // -0.95..0.95 spectral tilt (positive = brighter)
   'effort',         // 0..1 glottal pulse shape (0=lax, 1=tense)
@@ -33,6 +35,8 @@ export const DEFAULT = {
   gain: 3.5,
   vibratoDepth: 0,
   vibratoRate: 5,
+  tremoloDepth: 0,
+  tremoloRate: 5,
   aspiration: 0,
   tilt: 0,
   effort: 0.5,
@@ -53,6 +57,7 @@ export class FormantSynth {
     this.glottalPhase = 0;
     this.lfsr = 0xACE1ACE1 | 0;
     this.vibratoPhase = 0;
+    this.tremoloPhase = 0;
     this.tiltPrev = 0;
     this.bp1 = new BandpassBiquad();
     this.bp2 = new BandpassBiquad();
@@ -91,6 +96,7 @@ export class FormantSynth {
   reset(initialTarget) {
     this.glottalPhase = 0;
     this.vibratoPhase = 0;
+    this.tremoloPhase = 0;
     this.lfsr = 0xACE1ACE1 | 0;
     this.tiltPrev = 0;
     this.bp1.reset();
@@ -133,8 +139,13 @@ export class FormantSynth {
 
       // Vibrato LFO modulates F0 around its target value
       this.vibratoPhase += 2 * Math.PI * cur.vibratoRate / this.sr;
-      if (this.vibratoPhase > 2 * Math.PI) this.vibratoPhase -= 2 * Math.PI;
+      this.vibratoPhase -= 2 * Math.PI * Math.floor(this.vibratoPhase / (2 * Math.PI));
       const effF0 = cur.F0 + cur.vibratoDepth * Math.sin(this.vibratoPhase);
+
+      // Tremolo LFO modulates output amplitude
+      this.tremoloPhase += 2 * Math.PI * cur.tremoloRate / this.sr;
+      this.tremoloPhase -= 2 * Math.PI * Math.floor(this.tremoloPhase / (2 * Math.PI));
+      const tremoloMod = 1 - cur.tremoloDepth * (0.5 + 0.5 * Math.sin(this.tremoloPhase));
 
       const v = cur.voicing < 0 ? 0 : cur.voicing > 1 ? 1 : cur.voicing;
       this.lfsr = xorshift(this.lfsr);
@@ -153,7 +164,7 @@ export class FormantSynth {
 
       const y = (this.bp1.process(exc) * cur.A1
               +  this.bp2.process(exc) * cur.A2
-              +  this.bp3.process(exc) * cur.A3) * cur.gain;
+              +  this.bp3.process(exc) * cur.A3) * cur.gain * tremoloMod;
 
       const tilted = y - cur.tilt * this.tiltPrev;
       this.tiltPrev = y;

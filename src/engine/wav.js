@@ -1,6 +1,33 @@
-// Minimal RIFF/WAVE encoder w/ normalization
+// Minimal RIFF/WAVE encoder w/ normalization. Optionally embeds a LIST INFO
+// chunk after the data chunk with ISFT (software identifier) and ICMT (free-form
+// comment, used here to round-trip the source utterance string).
 
-export function encodeWav(float32, sampleRate, { peakNormalize = 0.95 } = {}) {
+function buildInfoChunk(metadata) {
+  const enc = new TextEncoder();
+  const subs = [];
+  if (metadata.software) subs.push({ id: 'ISFT', data: enc.encode(metadata.software) });
+  if (metadata.comment)  subs.push({ id: 'ICMT', data: enc.encode(metadata.comment) });
+  if (!subs.length) return null;
+  let infoContentSize = 4;
+  for (const s of subs) infoContentSize += 8 + s.data.length + (s.data.length % 2);
+  const listSize = 4 + infoContentSize;
+  const out = new Uint8Array(8 + listSize);
+  const dv = new DataView(out.buffer);
+  let o = 0;
+  out.set([0x4C, 0x49, 0x53, 0x54], o); o += 4;
+  dv.setUint32(o, listSize, true); o += 4;
+  out.set([0x49, 0x4E, 0x46, 0x4F], o); o += 4;
+  for (const s of subs) {
+    for (let i = 0; i < 4; i++) out[o + i] = s.id.charCodeAt(i);
+    o += 4;
+    dv.setUint32(o, s.data.length, true); o += 4;
+    out.set(s.data, o);
+    o += s.data.length + (s.data.length % 2);
+  }
+  return out;
+}
+
+export function encodeWav(float32, sampleRate, { peakNormalize = 0.95, metadata = null } = {}) {
   let gain = 1;
   if (peakNormalize) {
     let peak = 0;
@@ -12,9 +39,11 @@ export function encodeWav(float32, sampleRate, { peakNormalize = 0.95 } = {}) {
   }
 
   const dataBytes = float32.length * 2;
-  const totalSize = 44 + dataBytes;
+  const infoBytes = metadata ? buildInfoChunk(metadata) : null;
+  const totalSize = 44 + dataBytes + (infoBytes ? infoBytes.length : 0);
   const buf = new ArrayBuffer(totalSize);
   const view = new DataView(buf);
+  const u8 = new Uint8Array(buf);
 
   view.setUint32(0,  0x52494646, false);     // "RIFF"
   view.setUint32(4,  totalSize - 8, true);
@@ -37,6 +66,8 @@ export function encodeWav(float32, sampleRate, { peakNormalize = 0.95 } = {}) {
     else if (s < -1) s = -1;
     view.setInt16(offset + i * 2, Math.round(s * 32767), true);
   }
+
+  if (infoBytes) u8.set(infoBytes, 44 + dataBytes);
 
   return { bytes: new Uint8Array(buf), gain };
 }

@@ -219,6 +219,67 @@ textarea#seq {
 
 input[type=range] { vertical-align: middle; width: 14rem; }
 
+.state-mirror {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #0c0c0c;
+  font-size: 0.8rem;
+  min-height: 1.9rem;
+}
+.state-mirror .state-display {
+  color: var(--dim);
+  font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.state-mirror .state-display.empty {
+  font-style: italic;
+  opacity: 0.6;
+}
+.state-mirror button {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  flex: 0 0 auto;
+}
+.state-mirror button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.state-mirror button:disabled:hover {
+  border-color: var(--line);
+  color: var(--fg);
+}
+
+input#filename, input#video-title {
+  width: auto;
+  min-width: 10rem;
+  flex: 0 1 14rem;
+  min-height: 0;
+  padding: 0.35rem 0.55rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.export-options {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+}
+.export-options label {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+button#render-video { min-width: 6.6rem; text-align: center; }
+
 label { display: inline-block; margin-right: 0.75rem; color: var(--dim); }
 
 .sliders {
@@ -234,7 +295,31 @@ label { display: inline-block; margin-right: 0.75rem; color: var(--dim); }
 
 .row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .controls-row { margin-top: 0.5rem; }
-#phonemes button { min-width: 3.2em; font-family: ui-monospace, monospace; }
+#phonemes button {
+  min-width: 3.2em;
+  font-family: ui-monospace, monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.35rem 0.6rem;
+  line-height: 1.15;
+}
+#phonemes .phoneme-code { font-weight: 500; }
+#phonemes .phoneme-example {
+  font-size: 0.7rem;
+  color: var(--dim);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+#phonemes .phoneme-example .hi {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+#phonemes button:hover .phoneme-example { color: var(--fg); }
+#phonemes button:hover .phoneme-example .hi { color: #fff; }
 
 .status {
   color: var(--dim);

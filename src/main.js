@@ -9,6 +9,11 @@ const renderBtn  = document.getElementById('render');
 const videoBtn   = document.getElementById('render-video');
 const shareBtn   = document.getElementById('share');
 const submitBtn  = document.getElementById('submit-preset');
+const filenameInput = document.getElementById('filename');
+const videoTitleInput = document.getElementById('video-title');
+const stateMirror = document.getElementById('state-mirror');
+const stateDisplay = document.getElementById('state-display');
+const insertStateBtn = document.getElementById('insert-state');
 const phonemesDiv = document.getElementById('phonemes');
 const f0Slider          = document.getElementById('f0');
 const f0Val             = document.getElementById('f0val');
@@ -20,17 +25,25 @@ const vibratoSlider     = document.getElementById('vibrato');
 const vibratoVal        = document.getElementById('vibratoval');
 const vibratoRateSlider = document.getElementById('vibratoRate');
 const vibratoRateVal    = document.getElementById('vibratoRateVal');
+const tremoloSlider     = document.getElementById('tremolo');
+const tremoloVal        = document.getElementById('tremoloval');
+const tremoloRateSlider = document.getElementById('tremoloRate');
+const tremoloRateVal    = document.getElementById('tremoloRateVal');
 const aspSlider         = document.getElementById('aspiration');
 const aspVal            = document.getElementById('aspval');
 const tiltSlider        = document.getElementById('tilt');
 const tiltVal           = document.getElementById('tiltval');
 const effortSlider      = document.getElementById('effort');
 const effortVal         = document.getElementById('effortval');
+const volumeSlider      = document.getElementById('volume');
+const volumeVal         = document.getElementById('volumeval');
 const status            = document.getElementById('status');
 
 let ctx = null;
 let node = null;
+let gainNode = null;
 let audioInit = null;
+let videoRender = null;
 
 // Lazy init: AudioContext can only start on a user gesture, so we wait
 // for the first interaction (speak / canned / phoneme button / Enter).
@@ -43,9 +56,52 @@ function ensureAudio() {
       numberOfOutputs: 1,
       outputChannelCount: [1],
     });
-    node.connect(ctx.destination);
+    gainNode = ctx.createGain();
+    gainNode.gain.value = Number(volumeSlider.value);
+    node.connect(gainNode);
+    gainNode.connect(ctx.destination);
   })();
   return audioInit;
+}
+
+function filenameSlug(text) {
+  const tokens = text.split(/\s+/).filter(t => /^[A-Z]+!?$/.test(t)).slice(0, 6);
+  if (tokens.length === 0) return 'klattsch';
+  return ('klattsch-' + tokens.join('-').toLowerCase()).slice(0, 50);
+}
+
+function exportBaseName(text) {
+  const custom = filenameInput.value.trim();
+  if (custom) return custom.replace(/[\/\\:*?"<>|]/g, '_').slice(0, 80);
+  return filenameSlug(text);
+}
+
+function currentDirectives() {
+  const parts = [];
+  const f0 = Number(f0Slider.value);    if (f0 !== 120)   parts.push(`b${f0}`);
+  const rate = Number(durSlider.value); if (rate !== 110) parts.push(`r${rate}`);
+  const scale = Number(scaleSlider.value); if (scale !== 1) parts.push(`s${scale}`);
+  const vib = Number(vibratoSlider.value); if (vib !== 0) parts.push(`v${vib}`);
+  const vibR = Number(vibratoRateSlider.value); if (vibR !== 5) parts.push(`w${vibR}`);
+  const trem = Number(tremoloSlider.value); if (trem !== 0) parts.push(`m${trem}`);
+  const tremR = Number(tremoloRateSlider.value); if (tremR !== 5) parts.push(`n${tremR}`);
+  const asp = Number(aspSlider.value); if (asp !== 0) parts.push(`h${asp}`);
+  const tilt = Number(tiltSlider.value); if (tilt !== 0) parts.push(`t=${tilt}`);
+  const eff = Number(effortSlider.value); if (eff !== 0.5) parts.push(`g${eff}`);
+  return parts.join(' ');
+}
+
+function updateStateMirror() {
+  const dirs = currentDirectives();
+  if (dirs) {
+    stateDisplay.textContent = dirs;
+    stateDisplay.classList.remove('empty');
+    insertStateBtn.disabled = false;
+  } else {
+    stateDisplay.textContent = '(all sliders at default)';
+    stateDisplay.classList.add('empty');
+    insertStateBtn.disabled = true;
+  }
 }
 
 function compileOpts() {
@@ -55,6 +111,8 @@ function compileOpts() {
     scale:        Number(scaleSlider.value),
     vibratoDepth: Number(vibratoSlider.value),
     vibratoRate:  Number(vibratoRateSlider.value),
+    tremoloDepth: Number(tremoloSlider.value),
+    tremoloRate:  Number(tremoloRateSlider.value),
     aspiration:   Number(aspSlider.value),
     tilt:         Number(tiltSlider.value),
     effort:       Number(effortSlider.value),
@@ -86,13 +144,18 @@ async function renderWav(text) {
   });
   offNode.connect(offline.destination);
   const rendered = await offline.startRendering();
-  const { bytes, gain } = encodeWav(rendered.getChannelData(0), sr);
+  const { bytes, gain } = encodeWav(rendered.getChannelData(0), sr, {
+    metadata: {
+      software: 'klattsch · https://tgies.github.io/klattsch',
+      comment: text,
+    },
+  });
 
   const blob = new Blob([bytes], { type: 'audio/wav' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `klattsch-${Date.now()}.wav`;
+  a.download = `${exportBaseName(text)}.wav`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -103,6 +166,8 @@ async function renderWav(text) {
 
 async function renderVideo(text) {
   setStatus('rendering video...');
+  const ctrl = { cancelled: false, recorder: null, actx: null, canvas: null, raf: 0, resolveWait: null, timer: null };
+  videoRender = ctrl;
   const W = 1280, H = 720;
   const FPS = 30;
 
@@ -216,15 +281,22 @@ async function renderVideo(text) {
 
     // Phoneme string overlay along the bottom edge
     cctx.save();
-    cctx.globalAlpha = 0.5;
     cctx.fillStyle = '#fff';
     cctx.font = 'bold 26px ui-monospace, "Cascadia Code", Consolas, monospace';
     cctx.textBaseline = 'top';
     const pad = 24;
     const lines = wrapText(cctx, text, W - pad * 2);
     const lh = 34;
+    const baseAlpha = 0.5;
+    const fadeStart = 130;
+    const fadeEnd = 50;
     let y = H - lines.length * lh - pad;
     for (const line of lines) {
+      let alpha = baseAlpha;
+      if (y < fadeStart) {
+        alpha = baseAlpha * Math.max(0, Math.min(1, (y - fadeEnd) / (fadeStart - fadeEnd)));
+      }
+      cctx.globalAlpha = alpha;
       cctx.fillText(line, pad, y);
       y += lh;
     }
@@ -239,12 +311,26 @@ async function renderVideo(text) {
     cctx.textAlign = 'right';
     cctx.fillText('klattsch  ·  tgies.github.io/klattsch', W - 24, 24);
     cctx.restore();
+
+    const titleText = videoTitleInput.value.trim();
+    if (titleText) {
+      cctx.save();
+      cctx.globalAlpha = 0.6;
+      cctx.fillStyle = '#fff';
+      cctx.font = '22px ui-monospace, "Cascadia Code", Consolas, monospace';
+      cctx.textBaseline = 'top';
+      cctx.textAlign = 'left';
+      cctx.fillText(titleText, 24, 24);
+      cctx.restore();
+    }
   }
 
+  ctrl.recorder = recorder;
+  ctrl.actx = actx;
+  ctrl.canvas = canvas;
   recorder.start();
   const t0 = performance.now();
   let xLast = 0;
-  let raf;
 
   function loop() {
     const elapsed = performance.now() - t0;
@@ -276,12 +362,16 @@ async function renderVideo(text) {
       xLast = xNow;
     }
     compose();
-    if (elapsed < totalMs + 200) raf = requestAnimationFrame(loop);
+    if (!ctrl.cancelled && elapsed < totalMs + 200) ctrl.raf = requestAnimationFrame(loop);
   }
   loop();
 
-  await new Promise(r => setTimeout(r, totalMs + 400));
-  cancelAnimationFrame(raf);
+  await new Promise(resolve => {
+    ctrl.resolveWait = resolve;
+    ctrl.timer = setTimeout(resolve, totalMs + 400);
+  });
+  if (ctrl.cancelled) return;
+  if (ctrl.raf) cancelAnimationFrame(ctrl.raf);
   recorder.stop();
   await new Promise(r => recorder.onstop = r);
   actx.close();
@@ -291,7 +381,7 @@ async function renderVideo(text) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `klattsch-${Date.now()}.${ext}`;
+  a.download = `${exportBaseName(text)}.${ext}`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -307,11 +397,45 @@ function setStatus(text, kind = '') {
   status.className = kind;
 }
 
+const PHONEME_EXAMPLES = {
+  IY: 's[ee]',  IH: 's[i]t',   EH: 's[e]t',    AE: 'c[a]t',    AA: 'sp[a]',
+  AO: 'l[aw]',  AH: 'b[u]t',   UH: 'b[oo]k',   UW: 'b[oo]t',   ER: 'b[ir]d',
+  AY: 'b[i]te', AW: 'n[ow]',   EY: 's[ay]',    OW: 'g[o]',     OY: 'b[oy]',
+  W:  '[w]ay',  Y:  '[y]es',   R:  '[r]ed',    L:  '[l]et',    M:  '[m]e',
+  N:  '[n]o',   NG: 'si[ng]',  F:  '[f]ee',    TH: '[th]in',   S:  '[s]ee',
+  SH: '[sh]e',  V:  '[v]ee',   DH: '[th]is',   Z:  '[z]oo',    ZH: 'vi[s]ion',
+  HH: '[h]e',   P:  '[p]ea',   B:  '[b]ee',    T:  '[t]ea',    D:  '[d]ee',
+  K:  '[k]ey',  G:  '[g]o',    CH: '[ch]eese', JH: '[j]udge',
+};
+
+function buildExampleSpan(s) {
+  const frag = document.createDocumentFragment();
+  for (const part of s.split(/(\[[^\]]+\])/)) {
+    if (!part) continue;
+    if (part.startsWith('[') && part.endsWith(']')) {
+      const hi = document.createElement('span');
+      hi.className = 'hi';
+      hi.textContent = part.slice(1, -1);
+      frag.appendChild(hi);
+    } else {
+      frag.appendChild(document.createTextNode(part));
+    }
+  }
+  return frag;
+}
+
 function buildPhonemeButtons() {
   phonemesDiv.replaceChildren();
   for (const code of PHONEME_KEYS) {
     const b = document.createElement('button');
-    b.textContent = code;
+    const codeSpan = document.createElement('div');
+    codeSpan.className = 'phoneme-code';
+    codeSpan.textContent = code;
+    const exSpan = document.createElement('div');
+    exSpan.className = 'phoneme-example';
+    exSpan.appendChild(buildExampleSpan(PHONEME_EXAMPLES[code] ?? ''));
+    b.appendChild(codeSpan);
+    b.appendChild(exSpan);
     b.addEventListener('click', () => speak(code));
     phonemesDiv.appendChild(b);
   }
@@ -333,11 +457,40 @@ renderBtn.addEventListener('click', () => {
     setStatus('render failed: ' + err.message, 'warn');
   });
 });
+function cancelVideoRender() {
+  if (!videoRender) return;
+  const c = videoRender;
+  c.cancelled = true;
+  if (c.timer) clearTimeout(c.timer);
+  if (c.raf) cancelAnimationFrame(c.raf);
+  try { c.recorder?.stop(); } catch {}
+  try { c.actx?.close(); } catch {}
+  c.canvas?.remove();
+  if (c.resolveWait) c.resolveWait();
+  setStatus('cancelled', 'warn');
+}
+
 videoBtn.addEventListener('click', () => {
-  renderVideo(seqInput.value).catch(err => {
-    console.error(err);
-    setStatus('video render failed: ' + err.message, 'warn');
-  });
+  if (videoRender) {
+    cancelVideoRender();
+    videoBtn.textContent = 'render video';
+    videoRender = null;
+    return;
+  }
+  videoBtn.textContent = 'cancel';
+  renderVideo(seqInput.value)
+    .catch(err => {
+      console.error(err);
+      setStatus('video render failed: ' + err.message, 'warn');
+    })
+    .finally(() => {
+      videoBtn.textContent = 'render video';
+      videoRender = null;
+    });
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('button')) seqInput.focus();
 });
 
 // Enter submits, shift-enter newline
@@ -374,6 +527,15 @@ async function decompressSeq(b64) {
   return await new Response(stream).text();
 }
 
+const STORAGE_KEY = 'klattsch.seq';
+let saveDebounce;
+seqInput.addEventListener('input', () => {
+  clearTimeout(saveDebounce);
+  saveDebounce = setTimeout(() => {
+    try { localStorage.setItem(STORAGE_KEY, seqInput.value); } catch {}
+  }, 400);
+});
+
 (async () => {
   const params = new URLSearchParams(window.location.search);
   const z = params.get('z');
@@ -387,6 +549,11 @@ async function decompressSeq(b64) {
     }
   } else if (seq) {
     seqInput.value = seq;
+  } else {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) seqInput.value = saved;
+    } catch {}
   }
 })();
 
@@ -429,6 +596,12 @@ vibratoSlider.addEventListener('input', () => {
 vibratoRateSlider.addEventListener('input', () => {
   vibratoRateVal.textContent = Number(vibratoRateSlider.value).toFixed(1);
 });
+tremoloSlider.addEventListener('input', () => {
+  tremoloVal.textContent = Number(tremoloSlider.value).toFixed(2);
+});
+tremoloRateSlider.addEventListener('input', () => {
+  tremoloRateVal.textContent = Number(tremoloRateSlider.value).toFixed(1);
+});
 aspSlider.addEventListener('input', () => {
   aspVal.textContent = Number(aspSlider.value).toFixed(2);
 });
@@ -438,3 +611,21 @@ tiltSlider.addEventListener('input', () => {
 effortSlider.addEventListener('input', () => {
   effortVal.textContent = Number(effortSlider.value).toFixed(2);
 });
+volumeSlider.addEventListener('input', () => {
+  volumeVal.textContent = Number(volumeSlider.value).toFixed(2);
+  if (gainNode) gainNode.gain.value = Number(volumeSlider.value);
+});
+
+[f0Slider, durSlider, scaleSlider, vibratoSlider, vibratoRateSlider,
+ tremoloSlider, tremoloRateSlider, aspSlider, tiltSlider, effortSlider]
+  .forEach(s => s.addEventListener('input', updateStateMirror));
+
+insertStateBtn.addEventListener('click', () => {
+  const dirs = currentDirectives();
+  if (!dirs) return;
+  seqInput.value = dirs + ' ' + seqInput.value.replace(/^\s+/, '');
+  seqInput.dispatchEvent(new Event('input'));
+  seqInput.focus();
+});
+
+updateStateMirror();

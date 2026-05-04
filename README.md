@@ -105,6 +105,10 @@ node.port.postMessage({ type: 'schedule', schedule });
 
 - [**libadlmidi-js**](https://github.com/libadlmidi-js/libadlmidi-js) - WebAssembly build of libADLMIDI, an OPL3 FM synthesis library with AudioWorklet integration. Where klattsch does parallel-formant *vocal-tract* synthesis, libadlmidi-js does FM-operator synthesis: the sound of early-80s arcade boards and AdLib cards. Includes [oplsfxr](https://libadlmidi-js.github.io/examples/oplsfxr.html), a sfxr-style sound effect generator.
 
+## Built with klattsch
+
+- [**klattsch-sing**](https://sing.wasthatzero.net/) - a piano-roll sequencer for speech-based singing synthesis. Draw notes, type words or phonemes, render to WAV. Supports MIDI import, quantization, tempo + time signature, demo songs, and a custom KSP project file format. Built on the klattsch npm package.
+
 ## Commercial Support
 
 `klattsch` is built and maintained by [Tony Gies](https://github.com/tgies). For studios, indie developers, and agencies integrating klattsch into a shipped product, consulting is available through his consultancy, Crash United, LLC.

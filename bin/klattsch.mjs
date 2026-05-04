@@ -26,7 +26,12 @@ const synth = new FormantSynth({ sampleRate, schedule });
 const buf = new Float32Array(Math.ceil(totalMs * sampleRate / 1000));
 synth.process(buf);
 
-const { bytes, gain } = encodeWav(buf, sampleRate);
+const { bytes, gain } = encodeWav(buf, sampleRate, {
+  metadata: {
+    software: 'klattsch · https://tgies.github.io/klattsch',
+    comment: text,
+  },
+});
 writeFileSync(outPath, bytes);
 console.error(
   `wrote ${outPath}: ${(bytes.length / 1024).toFixed(0)} KB, ` +

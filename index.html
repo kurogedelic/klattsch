@@ -47,6 +47,12 @@
         <button id="share">share link</button>
         <span id="status" class="status"></span>
       </div>
+      <div class="row export-options">
+        <label for="filename">filename</label>
+        <input id="filename" type="text" placeholder="optional" autocomplete="off" spellcheck="false">
+        <label for="video-title">video title</label>
+        <input id="video-title" type="text" placeholder="optional" autocomplete="off" spellcheck="false">
+      </div>
       <details class="syntax">
         <summary>syntax help</summary>
         <pre>tokens (whitespace-separated)
@@ -75,6 +81,10 @@
   v                    reset vibrato depth
   wN                   vibrato rate in Hz (LFO frequency, default 5)
   w+N    w-N    w      relative / reset
+  mN                   tremolo depth (0..1; amplitude modulation)
+  m+N    m-N    m      relative / reset
+  nN                   tremolo rate in Hz (default 5)
+  n+N    n-N    n      relative / reset
   hN                   breathiness / aspiration mix (0..1)
   h+N    h-N    h      relative / reset
   tN                   spectral tilt (-0.9 darker .. +0.9 brighter)
@@ -83,6 +93,7 @@
   g+N    g-N    g      relative / reset
   [base=N] etc.        verbose form, equivalent to bN, rN, pN, sN
   # rest of line       comment
+  /* ... */            block comment (can span multiple lines)
 
 f0 evolution
   stress (!) is transient: doesn't carry forward
@@ -136,6 +147,10 @@ examples
 
     <fieldset>
       <legend>defaults (commands override this)</legend>
+      <div class="state-mirror" id="state-mirror">
+        <button id="insert-state" type="button" title="prepend these directives to the phoneme string">insert</button>
+        <code class="state-display" id="state-display"></code>
+      </div>
       <div class="sliders">
         <label>base F0 (Hz)</label>
         <input id="f0" type="range" min="70" max="320" value="120">
@@ -157,6 +172,14 @@ examples
         <input id="vibratoRate" type="range" min="2" max="10" step="0.1" value="5">
         <span id="vibratoRateVal">5.0</span>
 
+        <label>tremolo depth (m)</label>
+        <input id="tremolo" type="range" min="0" max="1" step="0.01" value="0">
+        <span id="tremoloval">0.00</span>
+
+        <label>tremolo rate (Hz)</label>
+        <input id="tremoloRate" type="range" min="0.5" max="15" step="0.1" value="5">
+        <span id="tremoloRateVal">5.0</span>
+
         <label>breathiness (h)</label>
         <input id="aspiration" type="range" min="0" max="1" step="0.01" value="0">
         <span id="aspval">0.00</span>
@@ -168,6 +191,10 @@ examples
         <label>vocal effort (g)</label>
         <input id="effort" type="range" min="0" max="1" step="0.01" value="0.5">
         <span id="effortval">0.50</span>
+
+        <label>output volume</label>
+        <input id="volume" type="range" min="0" max="1.5" step="0.01" value="1">
+        <span id="volumeval">1.00</span>
       </div>
     </fieldset>
   </section>
@@ -178,6 +205,7 @@ examples
       <p>klattsch ships as an npm package and works in node, in the browser, and as a CLI. you can drop it into your own game, app, or website. <a href="https://github.com/tgies/klattsch" target="_blank" rel="noopener">learn more</a>.</p>
       <p>made something good? <a href="https://github.com/tgies/klattsch/issues/new?template=preset.md" id="submit-preset" target="_blank" rel="noopener">submit it as a preset</a> and it might end up in the canned list above.</p>
       <p>you might also like <a href="https://libadlmidi-js.github.io/examples/oplsfxr.html" target="_blank" rel="noopener">oplsfxr</a>, my other sound toy thing.</p>
+      <p>if you want a piano-roll interface for singing, <a href="https://sing.wasthatzero.net/" target="_blank" rel="noopener">klattsch-sing</a> is a third-party tool built on top of klattsch.</p>
       <p class="aside">if you enjoyed klattsch please consider sending me a few bucks via the sponsors or ko-fi links above thanks it's been a rough year</p>
     </div>
 
