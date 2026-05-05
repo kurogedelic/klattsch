@@ -235,9 +235,7 @@ h1 {
 }
 .thank-you summary {
   cursor: pointer;
-  list-style: none;
 }
-.thank-you summary::-webkit-details-marker { display: none; }
 .thank-you details > p {
   margin: 0.4rem 0 0;
 }
@@ -254,13 +252,6 @@ h1 {
     font-size: 0.8rem;
     line-height: 1.55;
     padding: 0.45rem 0.7rem;
-  }
-  .thank-you summary {
-    list-style: revert;
-  }
-  .thank-you summary::-webkit-details-marker { display: revert; }
-  .thank-you summary::after {
-    content: "";
   }
   .thank-you details:not([open]) summary {
     opacity: 0.85;
